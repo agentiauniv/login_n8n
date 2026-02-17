@@ -12,7 +12,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['question'])) {
 
     $question = $_POST['question'];
 
-    $webhook_url = "https://n8n-9-dtnb.onrender.com/webhook/student-login";
+    $webhook_url = "https://n8n-9-dtnb.onrender.com/webhook/student-log";
 
     $data = [
         "email" => $_SESSION['user'],
@@ -70,4 +70,5 @@ if ($responseMessage != "") {
 
 </body>
 </html>
+
 
