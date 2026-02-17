@@ -62,7 +62,8 @@ if (isset($_POST["ask"]) && isset($_SESSION["user"])) {
 
     $question = trim($_POST["question"]);
 
-    $webhook_url = "https://n8n-9-dtnb.onrender.com/webhook/student-question";
+    $webhook_url = "https://n8n-9-dtnb.onrender.com/webhook/student-login";
+                   
 
     $payload = [
         "email" => $_SESSION["user"],
@@ -146,3 +147,4 @@ if (isset($_GET["logout"])) {
 
 </body>
 </html>
+
