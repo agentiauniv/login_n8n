@@ -1,150 +1,72 @@
 <?php
 session_start();
 
-$message = "";
-$response_message = "";
-
-/* =========================
-   PARTIE 1 : CONNEXION
-========================= */
-
-if (isset($_POST["login"])) {
-
-    $email = trim($_POST["email"]);
-    $password_input = trim($_POST["password"]);
-
-    $project_url = "https://uhqqzlpaybcyxrepisgi.supabase.co";
-    $api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVocXF6bHBheWJjeXhyZXBpc2dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4NDAyNzgsImV4cCI6MjA4NjQxNjI3OH0.LNQMIQs7euI7-4MMJWU_maqT6WdXq6lWuueCtF3kE24"; // Mets ta clé
-
-    $url = $project_url . "/rest/v1/login?select=*";
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "apikey: $api_key",
-        "Authorization: Bearer $api_key",
-        "Content-Type: application/json"
-    ]);
-
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    $data = json_decode($response, true);
-
-    $found = false;
-
-    foreach ($data as $user) {
-
-        $email_db = trim(str_replace(["\n", "\r"], '', $user["email"]));
-        $password_db = trim(str_replace(["\n", "\r"], '', $user["password"]));
-
-        if ($email_db === $email && $password_db === $password_input) {
-
-            $_SESSION["user"] = $email_db;
-            $_SESSION["matricule"] = $user["Matricule"];
-
-            $found = true;
-            break;
-        }
-    }
-
-    if (!$found) {
-        $message = "❌ Email ou mot de passe incorrect.";
-    }
+if (!isset($_SESSION['user'])) {
+    header("Location: index.php");
+    exit();
 }
 
-/* =========================
-   PARTIE 2 : QUESTION → n8n
-========================= */
+$responseMessage = "";
 
-if (isset($_POST["ask"]) && isset($_SESSION["user"])) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['question'])) {
 
-    $question = trim($_POST["question"]);
+    $question = $_POST['question'];
 
     $webhook_url = "https://n8n-9-dtnb.onrender.com/webhook/student-login";
-                   
 
-    $payload = [
-        "email" => $_SESSION["user"],
-        "matricule" => $_SESSION["matricule"],
+    $data = [
+        "email" => $_SESSION['user'],
         "question" => $question
     ];
 
-    $ch = curl_init($webhook_url);
+    $options = [
+        "http" => [
+            "header"  => "Content-Type: application/json\r\n",
+            "method"  => "POST",
+            "content" => json_encode($data),
+            "ignore_errors" => true
+        ],
+    ];
 
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Content-Type: application/json"
-    ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    $context  = stream_context_create($options);
+    $result = file_get_contents($webhook_url, false, $context);
 
-    $result = curl_exec($ch);
-
-    if (curl_errno($ch)) {
-        $response_message = "Erreur connexion n8n.";
+    if ($result === FALSE) {
+        $responseMessage = "❌ Erreur connexion n8n";
     } else {
-        $response_message = $result;
+        $responseMessage = $result;
     }
-
-    curl_close($ch);
-}
-
-/* =========================
-   LOGOUT
-========================= */
-
-if (isset($_GET["logout"])) {
-    session_destroy();
-    header("Location: index.php");
-    exit();
 }
 ?>
 
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Assistant Universitaire</title>
+    <title>Dashboard</title>
 </head>
 <body>
 
-<?php if (!isset($_SESSION["user"])): ?>
+<h2>Bienvenue <?php echo $_SESSION['user']; ?></h2>
 
-    <h2>Connexion</h2>
+<a href="logout.php">Se déconnecter</a>
 
-    <form method="POST">
-        <input type="email" name="email" placeholder="Email" required><br><br>
-        <input type="password" name="password" placeholder="Mot de passe" required><br><br>
-        <button type="submit" name="login">Se connecter</button>
-    </form>
+<hr>
 
-    <div><?php echo $message; ?></div>
+<h3>Pose ta question</h3>
 
-<?php else: ?>
+<form method="POST">
+    <input type="text" name="question" placeholder="Écris ta question..." required>
+    <button type="submit">Envoyer</button>
+</form>
 
-    <h2>Bienvenue <?php echo htmlspecialchars($_SESSION["user"]); ?></h2>
-    <p>Matricule : <?php echo htmlspecialchars($_SESSION["matricule"]); ?></p>
+<br>
 
-    <a href="?logout=true">Se déconnecter</a>
-
-    <hr>
-
-    <h3>Pose ta question</h3>
-
-    <form method="POST">
-        <input type="text" name="question" placeholder="Écris ta question..." required>
-        <button type="submit" name="ask">Envoyer</button>
-    </form>
-
-    <br>
-
-    <div>
-        <?php echo $response_message; ?>
-    </div>
-
-<?php endif; ?>
+<?php
+if ($responseMessage != "") {
+    echo "<h4>Réponse n8n :</h4>";
+    echo "<pre>$responseMessage</pre>";
+}
+?>
 
 </body>
 </html>
-
