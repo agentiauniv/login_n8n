@@ -4,9 +4,9 @@ session_start();
 $message = "";
 $response_message = "";
 
-/* =======================
-   PARTIE 1 : LOGIN
-======================= */
+/* =========================
+   PARTIE 1 : CONNEXION
+========================= */
 
 if (isset($_POST["login"])) {
 
@@ -14,7 +14,7 @@ if (isset($_POST["login"])) {
     $password_input = trim($_POST["password"]);
 
     $project_url = "https://uhqqzlpaybcyxrepisgi.supabase.co";
-    $api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVocXF6bHBheWJjeXhyZXBpc2dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4NDAyNzgsImV4cCI6MjA4NjQxNjI3OH0.LNQMIQs7euI7-4MMJWU_maqT6WdXq6lWuueCtF3kE24";
+    $api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVocXF6bHBheWJjeXhyZXBpc2dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4NDAyNzgsImV4cCI6MjA4NjQxNjI3OH0.LNQMIQs7euI7-4MMJWU_maqT6WdXq6lWuueCtF3kE24"; // Mets ta clé
 
     $url = $project_url . "/rest/v1/login?select=*";
 
@@ -32,53 +32,67 @@ if (isset($_POST["login"])) {
 
     $data = json_decode($response, true);
 
+    $found = false;
+
     foreach ($data as $user) {
 
-        if ($user["email"] === $email && $user["password"] === $password_input) {
+        $email_db = trim(str_replace(["\n", "\r"], '', $user["email"]));
+        $password_db = trim(str_replace(["\n", "\r"], '', $user["password"]));
 
-            $_SESSION["user"] = $email;
+        if ($email_db === $email && $password_db === $password_input) {
+
+            $_SESSION["user"] = $email_db;
+            $_SESSION["matricule"] = $user["Matricule"];
+
+            $found = true;
             break;
         }
     }
 
-    if (!isset($_SESSION["user"])) {
+    if (!$found) {
         $message = "❌ Email ou mot de passe incorrect.";
     }
 }
 
-/* =======================
-   PARTIE 2 : QUESTION
-======================= */
+/* =========================
+   PARTIE 2 : QUESTION → n8n
+========================= */
 
 if (isset($_POST["ask"]) && isset($_SESSION["user"])) {
 
     $question = trim($_POST["question"]);
 
-    $url = "https://n8n-9-dtnb.onrender.com/webhook/student-question";
+    $webhook_url = "https://n8n-9-dtnb.onrender.com/webhook/student-question";
 
-    $data = [
-        "question" => $question,
-        "user" => $_SESSION["user"]
+    $payload = [
+        "email" => $_SESSION["user"],
+        "matricule" => $_SESSION["matricule"],
+        "question" => $question
     ];
 
-    $ch = curl_init($url);
+    $ch = curl_init($webhook_url);
 
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "Content-Type: application/json"
     ]);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
 
     $result = curl_exec($ch);
-    curl_close($ch);
 
-    $response_message = $result;
+    if (curl_errno($ch)) {
+        $response_message = "Erreur connexion n8n.";
+    } else {
+        $response_message = $result;
+    }
+
+    curl_close($ch);
 }
 
-/* =======================
+/* =========================
    LOGOUT
-======================= */
+========================= */
 
 if (isset($_GET["logout"])) {
     session_destroy();
@@ -108,7 +122,8 @@ if (isset($_GET["logout"])) {
 
 <?php else: ?>
 
-    <h2>Bienvenue <?php echo $_SESSION["user"]; ?></h2>
+    <h2>Bienvenue <?php echo htmlspecialchars($_SESSION["user"]); ?></h2>
+    <p>Matricule : <?php echo htmlspecialchars($_SESSION["matricule"]); ?></p>
 
     <a href="?logout=true">Se déconnecter</a>
 
@@ -120,6 +135,8 @@ if (isset($_GET["logout"])) {
         <input type="text" name="question" placeholder="Écris ta question..." required>
         <button type="submit" name="ask">Envoyer</button>
     </form>
+
+    <br>
 
     <div>
         <?php echo $response_message; ?>
